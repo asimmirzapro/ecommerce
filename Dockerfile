@@ -15,7 +15,8 @@ FROM deps AS builder
 COPY turbo.json ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
-RUN pnpm build --filter api
+WORKDIR /app/apps/api
+RUN npx nest build
 
 # Production image
 FROM node:20-alpine AS runner
