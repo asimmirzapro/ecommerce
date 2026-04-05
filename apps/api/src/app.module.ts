@@ -28,13 +28,16 @@ import { ReportsModule } from './modules/reports/reports.module';
         const isProduction = config.get('NODE_ENV') === 'production';
         const databaseUrl = config.get<string>('DATABASE_URL');
 
+        const sslEnabled = config.get('DB_SSL') === 'true';
+        const sslConfig = sslEnabled ? { rejectUnauthorized: false } : false;
+
         if (databaseUrl) {
           return {
             type: 'postgres',
             url: databaseUrl,
             autoLoadEntities: true,
             synchronize: !isProduction,
-            ssl: isProduction ? { rejectUnauthorized: false } : false,
+            ssl: sslConfig,
           };
         }
 
@@ -47,7 +50,7 @@ import { ReportsModule } from './modules/reports/reports.module';
           database: config.get('DB_NAME', 'ecommerce'),
           autoLoadEntities: true,
           synchronize: !isProduction,
-          ssl: isProduction ? { rejectUnauthorized: false } : false,
+          ssl: sslConfig,
         };
       },
     }),
