@@ -1,0 +1,1 @@
+{"allowedDeprecatedVersions": {}, "onlyBuiltDependencies": ["@nestjs/core", "bcrypt", "sharp", "msgpackr-extract", "unrs-resolver"]}

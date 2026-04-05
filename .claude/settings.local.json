@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/asimmirza/dev/claude/dev/ecommerce/apps/web/src/app/\\\\\\(shop\\\\\\)/products/[slug])",
+      "Bash(mkdir -p /Users/asimmirza/dev/claude/dev/ecommerce/apps/web/src/app/\\\\\\(account\\\\\\)/account/orders/[orderNumber])",
+      "Bash(pnpm --version)",
+      "Bash(npm --version)",
+      "Bash(npm install:*)",
+      "Bash(open -a Docker)",
+      "Bash(docker-compose up:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm approve-builds:*)",
+      "Bash(pnpm --config.allow-build=bcrypt,sharp,msgpackr-extract,@nestjs/core,unrs-resolver install --force)"
+    ]
+  }
+}
