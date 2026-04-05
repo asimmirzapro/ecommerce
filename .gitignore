@@ -6,4 +6,5 @@ dist
 *.log
 .turbo
 coverage
-uploads
+/uploads
+apps/api/uploads
