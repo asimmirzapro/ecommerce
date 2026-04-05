@@ -12,6 +12,7 @@ RUN pnpm install --frozen-lockfile --filter api...
 
 # Build
 FROM deps AS builder
+COPY turbo.json ./
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 RUN pnpm build --filter api
