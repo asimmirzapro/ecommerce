@@ -30,13 +30,14 @@ import { ReportsModule } from './modules/reports/reports.module';
 
         const sslEnabled = config.get('DB_SSL') === 'true';
         const sslConfig = sslEnabled ? { rejectUnauthorized: false } : false;
+        const synchronize = config.get('DB_SYNC') === 'true' || !isProduction;
 
         if (databaseUrl) {
           return {
             type: 'postgres',
             url: databaseUrl,
             autoLoadEntities: true,
-            synchronize: !isProduction,
+            synchronize,
             ssl: sslConfig,
           };
         }
@@ -49,7 +50,7 @@ import { ReportsModule } from './modules/reports/reports.module';
           password: config.get('DB_PASSWORD', 'password'),
           database: config.get('DB_NAME', 'ecommerce'),
           autoLoadEntities: true,
-          synchronize: !isProduction,
+          synchronize,
           ssl: sslConfig,
         };
       },
