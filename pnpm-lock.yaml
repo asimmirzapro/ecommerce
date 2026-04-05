@@ -146,6 +146,9 @@ importers:
       '@types/multer':
         specifier: ^1.4.11
         version: 1.4.13
+      '@types/node':
+        specifier: '20'
+        version: 20.19.37
       '@types/passport-jwt':
         specifier: ^4.0.1
         version: 4.0.1
