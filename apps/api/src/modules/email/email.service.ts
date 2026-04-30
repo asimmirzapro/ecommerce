@@ -34,13 +34,16 @@ export class EmailService {
       return;
     }
     try {
+      const isPublicUrl = (url?: string | null) =>
+        !!url && !url.includes('localhost') && !url.includes('127.0.0.1');
+
       const itemRows = items.map(item => `
         <tr>
           <td style="padding:8px;border-bottom:1px solid #eee">
-            <div style="display:flex;align-items:center;gap:12px">
-              ${item.imageUrl
-                ? `<img src="${item.imageUrl}" alt="${item.productName}" width="56" height="56" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0" />`
-                : `<div style="width:56px;height:56px;background:#f3f4f6;border-radius:6px;flex-shrink:0"></div>`
+            <div style="display:flex;align-items:center;gap:10px">
+              ${isPublicUrl(item.imageUrl)
+                ? `<img src="${item.imageUrl}" alt="${item.productName}" width="40" height="40" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0" />`
+                : ''
               }
               <span>${item.productName}</span>
             </div>
@@ -99,13 +102,16 @@ export class EmailService {
       return;
     }
     try {
+      const isPublicUrl = (url?: string | null) =>
+        !!url && !url.includes('localhost') && !url.includes('127.0.0.1');
+
       const itemRows = items.map(item => `
         <tr>
           <td style="padding:8px;border-bottom:1px solid #eee">
-            <div style="display:flex;align-items:center;gap:12px">
-              ${item.imageUrl
-                ? `<img src="${item.imageUrl}" alt="${item.productName}" width="56" height="56" style="width:56px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0" />`
-                : `<div style="width:56px;height:56px;background:#f3f4f6;border-radius:6px;flex-shrink:0"></div>`
+            <div style="display:flex;align-items:center;gap:10px">
+              ${isPublicUrl(item.imageUrl)
+                ? `<img src="${item.imageUrl}" alt="${item.productName}" width="40" height="40" style="width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0" />`
+                : ''
               }
               <span>${item.productName}</span>
             </div>

@@ -3,11 +3,13 @@ import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import api from '@/lib/api';
 import { useCart } from '@/hooks/useCart';
 import { formatPrice } from '@/lib/utils';
 import { toast } from 'sonner';
-import { CheckCircle, CreditCard, MapPin, Plus } from 'lucide-react';
+import { Banknote, CheckCircle, CreditCard, MapPin, Plus } from 'lucide-react';
 
 type AddressForm = {
   line1: string; line2?: string; city: string;
@@ -15,6 +17,81 @@ type AddressForm = {
 };
 
 type SavedAddress = AddressForm & { id: string; label?: string; isDefault: boolean };
+
+const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise =
+  stripeKey && stripeKey.startsWith('pk_') && !stripeKey.includes('...')
+    ? loadStripe(stripeKey)
+    : null;
+
+function StripeCardForm({
+  clientSecret,
+  onSuccess,
+  amount,
+}: {
+  clientSecret: string | null;
+  onSuccess: () => Promise<void>;
+  amount: number;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setProcessing(true);
+    setCardError(null);
+
+    const card = elements.getElement(CardElement);
+    if (!card) { setProcessing(false); return; }
+
+    if (!clientSecret) {
+      await onSuccess();
+      return;
+    }
+
+    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: { card },
+    });
+
+    if (error) {
+      setCardError(error.message || 'Payment failed. Please try again.');
+      setProcessing(false);
+      return;
+    }
+
+    if (paymentIntent?.status === 'succeeded') {
+      await onSuccess();
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="border rounded-lg p-4 mb-4 bg-gray-50">
+        <CardElement
+          options={{
+            disableLink: true,
+            style: {
+              base: { fontSize: '16px', color: '#374151', '::placeholder': { color: '#9ca3af' } },
+              invalid: { color: '#ef4444' },
+            },
+          }}
+        />
+      </div>
+      {cardError && <p className="text-red-500 text-sm mb-4">{cardError}</p>}
+      <button
+        type="submit"
+        disabled={!stripe || processing}
+        className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+      >
+        <CreditCard className="w-5 h-5" />
+        {processing ? 'Processing payment...' : `Pay ${formatPrice(amount)}`}
+      </button>
+    </form>
+  );
+}
 
 export default function CheckoutPage() {
   const { cart } = useCart();
@@ -27,6 +104,8 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [showNewAddressForm, setShowNewAddressForm] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod'>('card');
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<AddressForm>({
     defaultValues: { country: 'US' },
@@ -38,7 +117,6 @@ export default function CheckoutPage() {
     retry: false,
   });
 
-  // Auto-select default address and fill form on load
   useEffect(() => {
     if (!savedAddresses.length) return;
     const def = savedAddresses.find(a => a.isDefault) || savedAddresses[0];
@@ -58,6 +136,9 @@ export default function CheckoutPage() {
 
   const createIntent = useMutation({
     mutationFn: (orderId: string) => api.post('/payments/create-intent', { orderId }).then(r => r.data),
+    onSuccess: (data) => {
+      if (data?.clientSecret) setClientSecret(data.clientSecret);
+    },
   });
 
   const handleAddressSubmit = async (formData: AddressForm) => {
@@ -82,13 +163,25 @@ export default function CheckoutPage() {
     }
   };
 
+  // COD: confirm order directly (no Stripe involved)
   const handlePayment = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await api.post(`/orders/${orderData.orderNumber}/confirm`);
       toast.success(`Order ${orderData.orderNumber} placed! Confirmation email sent.`);
     } catch {
       toast.success(`Order ${orderData.orderNumber} placed!`);
+    } finally {
+      setIsSubmitting(false);
     }
+    qc.invalidateQueries({ queryKey: ['cart'] });
+    router.push(`/account/orders/${orderData.orderNumber}`);
+  };
+
+  // Card: Stripe webhook confirms the order — frontend just redirects
+  const handleCardPaymentSuccess = async () => {
+    toast.success('Payment successful! Your order is being processed.');
     qc.invalidateQueries({ queryKey: ['cart'] });
     router.push(`/account/orders/${orderData.orderNumber}`);
   };
@@ -246,15 +339,67 @@ export default function CheckoutPage() {
 
           {step === 'payment' && (
             <div className="bg-white border rounded-xl p-6">
-              <h2 className="font-bold text-lg mb-4">Payment</h2>
-              <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center mb-6">
-                <CreditCard className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500 text-sm">Stripe payment form</p>
-                <p className="text-xs text-gray-400 mt-1">Configure STRIPE_PUBLISHABLE_KEY in .env to activate</p>
+              <h2 className="font-bold text-lg mb-6">Payment Method</h2>
+
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('card')}
+                  className={`border-2 rounded-xl p-4 text-left transition-colors ${paymentMethod === 'card' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}
+                >
+                  <CreditCard className={`w-6 h-6 mb-2 ${paymentMethod === 'card' ? 'text-orange-500' : 'text-gray-400'}`} />
+                  <p className={`font-semibold text-sm ${paymentMethod === 'card' ? 'text-orange-700' : 'text-gray-700'}`}>Credit / Debit Card</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Visa, Mastercard, Amex</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('cod')}
+                  className={`border-2 rounded-xl p-4 text-left transition-colors ${paymentMethod === 'cod' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}
+                >
+                  <Banknote className={`w-6 h-6 mb-2 ${paymentMethod === 'cod' ? 'text-orange-500' : 'text-gray-400'}`} />
+                  <p className={`font-semibold text-sm ${paymentMethod === 'cod' ? 'text-orange-700' : 'text-gray-700'}`}>Cash on Delivery</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Pay when delivered</p>
+                </button>
               </div>
-              <button onClick={handlePayment} className="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2">
-                <CheckCircle className="w-5 h-5" /> Complete Order ({formatPrice(orderData?.totalAmount || 0)})
-              </button>
+
+              {paymentMethod === 'card' && (
+                <>
+                  {!stripePromise && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                      <p className="text-sm text-yellow-800 font-medium">Stripe not configured</p>
+                      <p className="text-xs text-yellow-700 mt-1">Set <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code> in your environment to enable card payments.</p>
+                    </div>
+                  )}
+                  {stripePromise && (
+                    <Elements stripe={stripePromise}>
+                      <StripeCardForm
+                        clientSecret={clientSecret}
+                        onSuccess={handlePayment}
+                        amount={orderData?.totalAmount || 0}
+                      />
+                    </Elements>
+                  )}
+                </>
+              )}
+
+              {paymentMethod === 'cod' && (
+                <>
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
+                    <p className="text-sm text-blue-800">
+                      Please have <span className="font-semibold">{formatPrice(orderData?.totalAmount || 0)}</span> ready when your package arrives. Our delivery agent will collect the payment at your door.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handlePayment}
+                    disabled={isSubmitting}
+                    className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                    {isSubmitting ? 'Placing Order...' : `Place Order (${formatPrice(orderData?.totalAmount || 0)})`}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
